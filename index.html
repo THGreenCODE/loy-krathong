@@ -84,6 +84,15 @@ input[type=text]{width:100%;background:#0a0e28;border:1px solid var(--line);bord
 .photo canvas{width:56px;height:56px;border-radius:50%;background:#0a0e28;border:1px solid var(--line);flex:0 0 auto}
 .file{padding:9px 14px;border:1px dashed var(--line);border-radius:12px;font-size:14px;color:var(--muted);display:inline-block}
 .hint{font-size:13px;color:var(--muted)}
+.mrow{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}
+.mrow canvas{width:40px;height:40px;border-radius:50%;background:#0a0e28;border:1px solid var(--line);flex:0 0 auto}
+.mrow span{flex:1;font-size:15px}
+.mrow small{color:var(--muted);font-size:12px}
+.mbtn{padding:6px 12px;border-radius:999px;border:1px solid var(--line);font-size:14px}
+.mbtn.del{color:#ff9a9a;border-color:rgba(255,120,120,.4)}
+#memPv{width:100%;max-width:300px;height:170px;align-self:center;border-radius:14px;background:radial-gradient(ellipse at 50% 100%,#14275a,#070a1c)}
+#memEd{display:flex;flex-direction:column;gap:10px}
+#memEd[hidden]{display:none}
 .ghost{padding:11px;border-radius:12px;border:1px solid var(--gold);color:var(--gold);font-size:15px}
 #toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 120px);transform:translateX(-50%);background:rgba(10,14,40,.92);border:1px solid var(--gold);color:var(--ink);border-radius:999px;padding:8px 16px;font-size:14px;z-index:9;display:none;max-width:90%;text-align:center}
 @media (prefers-reduced-motion:reduce){.sheet{transition:none}.dot.wait{animation:none}}
@@ -96,7 +105,7 @@ input[type=text]{width:100%;background:#0a0e28;border:1px solid var(--line);bord
 <div class="top" id="top">
   <div class="row">
     <div class="pill" id="status"><span class="dot" id="dot"></span><span id="stxt">กำลังเชื่อมต่อ…</span></div>
-    <div style="display:flex;gap:6px"><button class="icon-btn" id="inviteBtn">ชวนเพื่อน</button><button class="icon-btn" id="simBtn">+จำลอง</button><button class="icon-btn" id="snd" aria-pressed="false">เสียง: ปิด</button></div>
+    <div style="display:flex;gap:6px"><button class="icon-btn" id="inviteBtn">ชวนเพื่อน</button><button class="icon-btn" id="memBtn">สมาชิก</button><button class="icon-btn" id="simBtn">+จำลอง</button><button class="icon-btn" id="snd" aria-pressed="false">เสียง: ปิด</button></div>
   </div>
   <div class="scenes" id="scenes"></div>
 </div>
@@ -114,7 +123,23 @@ input[type=text]{width:100%;background:#0a0e28;border:1px solid var(--line);bord
   <textarea id="wish" maxlength="60" placeholder="พิมพ์สิ่งที่อยากขอ หรือปล่อยกะทงเลยโดยไม่ใส่ก็ได้"></textarea>
   <div class="count"><span id="cnt">0</span>/60</div>
   <label class="chk"><input type="checkbox" id="pub" checked> ให้คนอื่นอ่านคำอธิษฐานได้</label>
+  <div class="gl" id="whoL">ลอยในนาม</div>
+  <div class="opts" id="who"></div>
   <button class="go" id="go">ปล่อยกะทงลงน้ำ</button>
+</section>
+
+<section class="sheet" id="memSheet" aria-label="สมาชิก">
+  <h2>สมาชิกของเรา <button class="close" id="memClose">ปิด</button></h2>
+  <p class="hint">เพิ่มคนที่มาลอยกระทงด้วยกันได้ 4 คน ทุกคนในห้องจะเห็น</p>
+  <div id="memList"></div>
+  <button class="ghost" id="memAdd">+ เพิ่มสมาชิก</button>
+  <div id="memEd" hidden>
+    <canvas id="memPv"></canvas>
+    <input type="text" id="memName" maxlength="10" placeholder="ชื่อสมาชิก" aria-label="ชื่อสมาชิก">
+    <div class="photo"><canvas id="memFacePv" width="56" height="56"></canvas><label class="file" for="memFaceIn">ใส่รูปหน้า (ไม่บังคับ)</label><input type="file" id="memFaceIn" accept="image/*" hidden><button class="mbtn del" id="memFaceDel">ลบรูป</button></div>
+    <div class="opts" id="memOpts"></div>
+    <button class="go" id="memDone">เสร็จ</button>
+  </div>
 </section>
 
 <section class="intro" id="intro">
@@ -164,7 +189,7 @@ const S={
   scene:0, role:'m', name:'', faceSrc:'', faceImg:null,
   peers:{}, room:null, code:'', started:false, adopted:{}, adoptedAny:false, low:false, fpsN:0, fpsSum:0, roomState:'connecting', adoptedFrom:'',
   cfg:{base:0,flower:0,accent:0,color:0}, outfit:{hair:0,style:0,color:0},
-  krs:[], tab:'base', me:{launchT:-99}, soundOn:false
+  krs:[], members:[], mfaces:{}, who:'', memOpen:false, memEdit:null, tab:'base', me:{launchT:-99}, soundOn:false
 };
 try{ const sv=JSON.parse(localStorage.getItem('lk_profile')||'null'); if(sv){ S.role=sv.role||S.role; S.cfg=Object.assign(S.cfg,sv.cfg||{}); S.outfit=Object.assign(S.outfit,sv.outfit||{}); } }catch(e){}
 
@@ -802,7 +827,8 @@ function drawBankCrowd(c,bank){
 /* ---------- krathongs ---------- */
 function addKr(d,mine){
   const now=performance.now()/1000;
-  const owner=mine?S.me:S.peers[d.uid];
+  let owner=mine?S.me:S.peers[d.uid];
+  if(d.mid&&owner){ const mm=(mine?S.members:(owner.mem||[])).find(m=>m.id===d.mid); if(mm) owner=mm; }
   const n=Object.keys(S.peers).length+1;
   const sx=(owner&&owner._x)||W*0.5;
   let t0=now;
@@ -971,12 +997,14 @@ function frame(ts){
   if(!S.low){ g.save(); g.beginPath(); g.rect(0,H*0.4,W,H*0.4); g.clip(); g.translate(0,H*0.8); g.scale(1,-1); drawFw(t,true); g.restore(); }
   drawLanterns(t,dt);
   S.me.role=S.role; S.me.name=S.name; S.me.faceImg=S.faceImg; S.me.uid=S.uid; S.me.outfit=S.outfit;
-  const crowd=[S.me].concat(Object.values(S.peers)).sort((a,b)=>a.uid<b.uid?-1:1);
+  const groups=[{uid:S.uid,o:S.me,mem:S.members}].concat(Object.values(S.peers).map(p=>({uid:p.uid,o:p,mem:p.mem||[]}))).sort((a,b)=>a.uid<b.uid?-1:1);
+  const crowd=[]; groups.forEach(gp=>{ crowd.push(gp.o); gp.mem.forEach(m=>crowd.push(m)); });
   const nn=crowd.length, ph=Math.min(CH,W/(nn+0.6)*1.5);
   crowd.forEach((p,i)=>{ const x=W*(i+1)/(nn+1); p._x=x; drawPerson(p,x,ph,x<W/2-1?1:-1,t,false,p===S.me); });
-  if(nn===1) drawPerson({role:S.role==='f'?'m':'f',name:'รอเพื่อน…'},W*0.8,CH,-1,t,true,false);
+  if(nn===1&&!Object.keys(S.peers).length) drawPerson({role:S.role==='f'?'m':'f',name:'รอเพื่อน…'},W*0.8,CH,-1,t,true,false);
   drawKrs(t);
   if(S.sheetOpen) drawPreview(t);
+  if(S.memOpen) drawMemPreview(t);
   requestAnimationFrame(frame);
 }
 
@@ -1036,7 +1064,7 @@ function paintOutfit(){
     optsEl.appendChild(row);
   });
 }
-function openSheet(){ S.sheetOpen=true; sheet.classList.add('open'); $('#open').style.display='none'; $('#fwBtn').style.display='none'; paintTabs(); }
+function openSheet(){ if(S.memOpen) closeMem(); paintWho(); S.sheetOpen=true; sheet.classList.add('open'); $('#open').style.display='none'; $('#fwBtn').style.display='none'; paintTabs(); }
 function closeSheet(){ S.sheetOpen=false; sheet.classList.remove('open'); $('#open').style.display=''; $('#fwBtn').style.display=''; }
 $('#open').addEventListener('click',openSheet);
 $('#close').addEventListener('click',closeSheet);
@@ -1048,12 +1076,100 @@ wish.addEventListener('input',paintChips);
 wish.addEventListener('input',()=>{ $('#cnt').textContent=Array.from(wish.value).length;  });
 goBtn.addEventListener('click',()=>{
   const text=wish.value.trim();
-  const d={id:S.uid+'-'+Date.now().toString(36),uid:S.uid,role:S.role,name:S.name,cfg:Object.assign({},S.cfg),wish:text,pub:$('#pub').checked};
-  addKr(d,true);
-  if(S.room){ try{ S.room.emit('launch',d); }catch(e){} }
+  const ids=S.who==='*'?[''].concat(S.members.map(m=>m.id)):[S.who||''];
+  ids.forEach((mid,i)=>setTimeout(()=>{
+    const d={id:S.uid+'-'+Date.now().toString(36)+i,uid:S.uid,mid:mid,role:S.role,name:S.name,cfg:Object.assign({},S.cfg),wish:i===0?text:'',pub:$('#pub').checked};
+    addKr(d,true);
+    if(S.room){ try{ S.room.emit('launch',d); }catch(e){} }
+  },i*600));
   wish.value=''; $('#cnt').textContent='0'; paintChips(); saveProfile(); closeSheet();
 });
 function saveProfile(){ try{ localStorage.setItem('lk_profile',JSON.stringify({role:S.role,name:S.name,cfg:S.cfg,outfit:S.outfit})); }catch(e){} }
+
+
+/* ---------- members (extra characters owned by this device) ---------- */
+const MEM_MAX=4;
+function memLoad(){ try{ const a=JSON.parse(localStorage.getItem('lk_members')||'[]'); if(Array.isArray(a)) S.members=a.slice(0,MEM_MAX).map(m=>{ const o={id:String(m.id||Math.random().toString(36).slice(2,7)),role:m.role==='f'?'f':'m',name:String(m.name||'สมาชิก').slice(0,10),outfit:Object.assign({hair:0,style:0,color:0},m.outfit||{}),faceSrc:m.faceSrc||'',faceImg:null,launchT:-99}; if(o.faceSrc){ const im=new Image(); im.onload=()=>{ o.faceImg=im; paintMemList(); }; im.src=o.faceSrc; } return o; }); }catch(e){} }
+function memSave(){ try{ localStorage.setItem('lk_members',JSON.stringify(S.members.map(m=>({id:m.id,role:m.role,name:m.name,outfit:m.outfit,faceSrc:m.faceSrc})))); }catch(e){} }
+function faceKey(src){ return src?hashStr(src).toString(36):''; }
+function memPresence(){ return S.members.map(m=>({id:m.id,role:m.role,name:m.name,outfit:m.outfit,hf:faceKey(m.faceSrc)})); }
+let memFaceT=0;
+function sendMemFaces(force){
+  if(!S.room) return; const now=Date.now(); if(!force&&now-memFaceT<20000) return; memFaceT=now;
+  S.members.forEach((m,i)=>{ if(m.faceSrc&&m.faceSrc.length<2600) setTimeout(()=>{ try{ S.room.emit('mface',{uid:S.uid,id:m.id,hf:faceKey(m.faceSrc),face:m.faceSrc}); }catch(e){} },300+i*700); });
+}
+function onMemFace(d){
+  if(!d||!d.uid||d.uid===S.uid||!d.id||typeof d.face!=='string'||d.face.indexOf('data:image/')!==0) return;
+  const key=d.uid+'/'+d.id+'/'+d.hf; if(S.mfaces[key]) return;
+  const im=new Image(); im.onload=()=>{ S.mfaces[key]=im; const p=S.peers[d.uid]; if(p&&p.mem) p.mem.forEach(m=>{ if(m.id===d.id&&m.hf===d.hf) m.faceImg=im; }); }; im.src=d.face;
+}
+function peerMembers(p,list){
+  const old={}; (p.mem||[]).forEach(m=>old[m.id]=m);
+  p.mem=(Array.isArray(list)?list:[]).slice(0,MEM_MAX).filter(m=>m&&m.id).map(m=>{ const o=old[m.id]||{launchT:-99};
+    o.id=String(m.id).slice(0,12); o.role=m.role==='f'?'f':'m'; o.name=String(m.name||'สมาชิก').slice(0,10);
+    o.outfit=(m.outfit&&typeof m.outfit==='object')?{hair:m.outfit.hair|0,style:m.outfit.style|0,color:m.outfit.color|0}:undefined;
+    o.hf=String(m.hf||''); o.faceImg=o.hf?(S.mfaces[p.uid+'/'+o.id+'/'+o.hf]||null):null; return o; });
+}
+const memSheet=$('#memSheet'), memList=$('#memList'), memEd=$('#memEd'), memName=$('#memName'), memOpts=$('#memOpts'), memPv=$('#memPv'), memFacePv=$('#memFacePv'), memFaceIn=$('#memFaceIn');
+function avatarTo(cv2,m){ const x=cv2.getContext('2d'), w=cv2.width; x.clearRect(0,0,w,w); x.fillStyle=m.role==='f'?'#5a2a48':'#24345e'; x.fillRect(0,0,w,w);
+  if(m.faceImg) x.drawImage(m.faceImg,0,0,w,w); else { x.fillStyle='#f6ecd6'; x.font='600 '+(w*0.45)+'px '+FONT; x.textAlign='center'; x.textBaseline='middle'; x.fillText(Array.from(m.name||'?')[0]||'?',w/2,w/2+1); } }
+function paintMemList(){
+  memList.textContent='';
+  const rows=[{m:{name:S.name||'ฉัน',role:S.role,faceImg:S.faceImg},me:true}].concat(S.members.map(m=>({m})));
+  rows.forEach(({m,me})=>{ const r=document.createElement('div'); r.className='mrow'; const cv2=document.createElement('canvas'); cv2.width=cv2.height=80; avatarTo(cv2,m); r.appendChild(cv2);
+    const sp=document.createElement('span'); sp.textContent=m.name+' '; const sm=document.createElement('small'); sm.textContent=me?'(ตัวเรา)':(m.role==='f'?'หญิง':'ชาย'); sp.appendChild(sm); r.appendChild(sp);
+    if(!me){ const e=document.createElement('button'); e.className='mbtn'; e.textContent='แก้ไข'; e.addEventListener('click',()=>memEditOpen(m)); r.appendChild(e);
+      const dl=document.createElement('button'); dl.className='mbtn del'; dl.textContent='ลบ'; dl.addEventListener('click',()=>{ S.members=S.members.filter(x=>x!==m); if(S.memEdit===m) memEditClose(); if(S.who===m.id) S.who=''; memSave(); paintMemList(); pushPresence(); }); r.appendChild(dl); }
+    memList.appendChild(r); });
+  const add=$('#memAdd'); add.disabled=S.members.length>=MEM_MAX; add.style.opacity=add.disabled?.4:1; add.textContent=add.disabled?'ครบ 4 คนแล้ว':'+ เพิ่มสมาชิก';
+}
+function memEditOpen(m){ S.memEdit=m; memEd.hidden=false; memName.value=m.name; paintMemOpts(); drawMemFacePv(); setTimeout(()=>memEd.scrollIntoView({behavior:'smooth',block:'nearest'}),50); }
+function memEditClose(){ S.memEdit=null; memEd.hidden=true; }
+function drawMemFacePv(){ const m=S.memEdit; const x=memFacePv.getContext('2d'); x.clearRect(0,0,56,56); x.fillStyle='#0a0e28'; x.fillRect(0,0,56,56); if(m&&m.faceImg) x.drawImage(m.faceImg,0,0,56,56); $('#memFaceDel').style.display=(m&&m.faceSrc)?'':'none'; }
+function paintMemOpts(){
+  const m=S.memEdit; if(!m) return; memOpts.textContent=''; const f=m.role==='f';
+  [['ตัวละคร',['ชาย','หญิง'],()=>f?1:0,i=>{ m.role=i?'f':'m'; m.outfit.hair=0; m.outfit.style=0; }],
+   ['ทรงผม',f?HAIR_F:HAIR_M,()=>m.outfit.hair,i=>{ m.outfit.hair=i; }],
+   ['ชุด',f?STY_F:STY_M,()=>m.outfit.style,i=>{ m.outfit.style=i; }],
+   ['สีชุด',OUT_COLN,()=>m.outfit.color,i=>{ m.outfit.color=i; }]].forEach(([title,items,get,set])=>{
+    const lb=document.createElement('div'); lb.className='gl'; lb.textContent=title; memOpts.appendChild(lb);
+    const row=document.createElement('div'); row.className='opts'; row.style.width='100%';
+    items.forEach((n,i)=>{ const b=document.createElement('button'); b.className='opt'; b.textContent=n; b.setAttribute('aria-pressed',String(get()===i));
+      b.addEventListener('click',()=>{ set(i); memSave(); paintMemOpts(); paintMemList(); memPush(); }); row.appendChild(b); });
+    memOpts.appendChild(row); });
+}
+let memPushT=null; function memPush(){ clearTimeout(memPushT); memPushT=setTimeout(pushPresence,800); }
+memName.addEventListener('input',()=>{ const m=S.memEdit; if(!m) return; m.name=(memName.value.trim()||'สมาชิก').slice(0,10); memSave(); paintMemList(); memPush(); });
+memFaceIn.addEventListener('change',()=>{ const m=S.memEdit, f=memFaceIn.files&&memFaceIn.files[0]; if(!m||!f) return;
+  const url=URL.createObjectURL(f), img=new Image();
+  img.onload=()=>{ const cc=makeFaceCanvasFromImage(img); m.faceImg=cc; try{ m.faceSrc=cc.toDataURL('image/jpeg',0.5); }catch(e){ m.faceSrc=''; } URL.revokeObjectURL(url); memFaceIn.value=''; drawMemFacePv(); memSave(); paintMemList(); pushPresence(); sendMemFaces(true); };
+  img.onerror=()=>URL.revokeObjectURL(url); img.src=url; });
+$('#memFaceDel').addEventListener('click',()=>{ const m=S.memEdit; if(!m) return; m.faceImg=null; m.faceSrc=''; drawMemFacePv(); memSave(); paintMemList(); pushPresence(); });
+$('#memAdd').addEventListener('click',()=>{ if(S.members.length>=MEM_MAX) return; const n=S.members.length+1;
+  const m={id:Math.random().toString(36).slice(2,7),role:S.role==='f'?'m':'f',name:'สมาชิก '+n,outfit:{hair:(n*2)%4,style:n%6,color:0},faceSrc:'',faceImg:null,launchT:-99};
+  S.members.push(m); memSave(); paintMemList(); memEditOpen(m); pushPresence(); });
+$('#memDone').addEventListener('click',()=>{ memEditClose(); paintMemList(); });
+function openMem(){ closeSheet(); S.memOpen=true; memSheet.classList.add('open'); $('#open').style.display='none'; $('#fwBtn').style.display='none'; paintMemList(); }
+function closeMem(){ S.memOpen=false; memEditClose(); memSheet.classList.remove('open'); $('#open').style.display=''; $('#fwBtn').style.display=''; }
+$('#memBtn').addEventListener('click',()=>{ S.memOpen?closeMem():openMem(); });
+$('#memClose').addEventListener('click',closeMem);
+function drawMemPreview(t){
+  const m=S.memEdit; if(!m||memEd.hidden) return; const pc=memPv.getContext('2d');
+  const d=Math.min(window.devicePixelRatio||1,2), w=memPv.clientWidth||300, h=memPv.clientHeight||170;
+  if(memPv.width!==Math.round(w*d)){ memPv.width=Math.round(w*d); memPv.height=Math.round(h*d); }
+  pc.setTransform(d,0,0,d,0,0); pc.clearRect(0,0,w,h);
+  const old=g; g=pc; try{ drawPerson(m,w/2,h*0.78,1,t,false,false,h-4); }finally{ g=old; }
+}
+/* who releases the krathong */
+const whoEl=$('#who');
+function paintWho(){
+  whoEl.textContent=''; const show=S.members.length>0; whoEl.style.display=show?'':'none'; $('#whoL').style.display=show?'':'none';
+  if(S.who&&S.who!=='*'&&!S.members.some(m=>m.id===S.who)) S.who='';
+  [['',S.name||'ฉัน']].concat(S.members.map(m=>[m.id,m.name])).concat(S.members.length?[['*','ทั้งกลุ่ม']]:[]).forEach(([id,n])=>{
+    const b=document.createElement('button'); b.className='opt'; b.style.fontSize='14px'; b.style.padding='6px 12px'; b.textContent=n; b.setAttribute('aria-pressed',String(S.who===id));
+    b.addEventListener('click',()=>{ S.who=id; paintWho(); }); whoEl.appendChild(b); });
+}
+memLoad();
 
 /* ---------- intro ---------- */
 const nameIn=$('#name'), faceIn=$('#faceIn'), facePv=$('#facePv');
@@ -1098,7 +1214,7 @@ function paintStatus(){
 }
 function pushPresence(){
   if(!S.room) return;
-  try{ S.room.presence({uid:S.uid,role:S.role,name:S.name,face:(S.faceSrc&&S.faceSrc.length<2600)?S.faceSrc:'',scene:S.scene,joinedAt:S.joinedAt,outfit:S.outfit}); }catch(e){}
+  try{ S.room.presence({uid:S.uid,role:S.role,name:S.name,face:(S.faceSrc&&S.faceSrc.length<2600)?S.faceSrc:'',scene:S.scene,joinedAt:S.joinedAt,outfit:S.outfit,mem:memPresence()}); }catch(e){}
 }
 function unwrap(m){ if(m&&typeof m==='object'&&m.data&&typeof m.data==='object'&&m.cfg===undefined&&m.scene===undefined&&m.x===undefined) return m.data; return m; }
 function onPeers(list){
@@ -1112,12 +1228,16 @@ function onPeers(list){
     seen[st.uid]=st;
   }
   Object.keys(S.peers).forEach(u=>{ if(!seen[u]&&!S.peers[u].fake) delete S.peers[u]; });
+  let fresh=false;
   Object.keys(seen).slice(0,11).forEach(u=>{
+    if(!S.peers[u]) fresh=true;
     const f=seen[u], p=S.peers[u]||(S.peers[u]={uid:u,launchT:-99});
+    peerMembers(p,f.mem);
     p.role=f.role==='f'?'f':'m'; p.name=String(f.name||'เพื่อน').slice(0,10); p.outfit=(f.outfit&&typeof f.outfit==='object')?{hair:f.outfit.hair|0,style:f.outfit.style|0,color:f.outfit.color|0}:undefined;
     if(f.face!==p.faceSrc){ p.faceSrc=f.face; if(f.face&&String(f.face).indexOf('data:image/')===0){ const im=new Image(); im.onload=()=>{ p.faceImg=im; }; im.src=f.face; } else p.faceImg=null; }
     if(f.joinedAt&&f.joinedAt<S.joinedAt&&!S.adopted[u]){ S.adopted[u]=1; if(typeof f.scene==='number'&&f.scene!==S.scene&&!S.adoptedAny){ S.adoptedAny=true; setScene(f.scene,false); } }
   });
+  if(fresh&&S.members.some(m=>m.faceSrc)) setTimeout(()=>sendMemFaces(false),800+Math.random()*1500);
   paintStatus();
 }
 /* ---------- standalone room over ntfy.sh (no login, works for anyone with the link) ---------- */
@@ -1159,10 +1279,12 @@ function connectRoom(){
   const room=makeNtfyRoom('lk-'+S.code);
   S.room=room; S.roomState='connecting'; paintStatus();
   room.onPeers(onPeers);
-  room.on('launch',m=>{ const d=unwrap(m); if(!d||!d.cfg||d.uid===S.uid) return; if(!S.peers[d.uid]){ S.peers[d.uid]={uid:d.uid,role:d.role==='f'?'f':'m',name:String(d.name||'เพื่อน').slice(0,10),launchT:-99}; paintStatus(); } addKr({id:d.id,uid:d.uid,cfg:{base:d.cfg.base|0,flower:d.cfg.flower|0,accent:d.cfg.accent|0,color:d.cfg.color|0},wish:d.wish,pub:d.pub},false); });
+  room.on('launch',m=>{ const d=unwrap(m); if(!d||!d.cfg||d.uid===S.uid) return; if(!S.peers[d.uid]){ S.peers[d.uid]={uid:d.uid,role:d.role==='f'?'f':'m',name:String(d.name||'เพื่อน').slice(0,10),launchT:-99}; paintStatus(); } addKr({id:d.id,uid:d.uid,mid:typeof d.mid==='string'?d.mid.slice(0,12):'',cfg:{base:d.cfg.base|0,flower:d.cfg.flower|0,accent:d.cfg.accent|0,color:d.cfg.color|0},wish:d.wish,pub:d.pub},false); });
+  room.on('mface',m=>onMemFace(unwrap(m)));
   room.on('fw',m=>{ const d=unwrap(m); if(!d||d.uid===S.uid||typeof d.x!=='number') return; fireworkAt(d.x,d.y,d.c,d.seed); });
   room.on('scene',m=>{ const d=unwrap(m); if(!d||d.uid===S.uid||typeof d.scene!=='number') return; setScene(d.scene,false); });
   room.open();
+  setTimeout(()=>sendMemFaces(true),2500);
   setTimeout(()=>{ if(S.roomState!=='ok'){ S.roomState='alone'; S.failCode='N'; paintStatus(); } },10000);
 }
 
