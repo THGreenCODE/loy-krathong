@@ -109,12 +109,12 @@ input[type=text]{width:100%;background:#0a0e28;border:1px solid var(--line);bord
   <canvas id="pv" width="300" height="150"></canvas>
   <div class="tabs" role="tablist" id="tabs"></div>
   <div class="opts" id="opts"></div>
-  <label class="cap" for="wish">คำอธิษฐาน</label>
+  <label class="cap" for="wish">คำอธิษฐาน (ไม่ใส่ก็ได้)</label>
   <div class="opts" id="wishChips"></div>
-  <textarea id="wish" maxlength="60" placeholder="พิมพ์สิ่งที่อยากขอ แล้วกดปล่อย"></textarea>
+  <textarea id="wish" maxlength="60" placeholder="พิมพ์สิ่งที่อยากขอ หรือปล่อยกะทงเลยโดยไม่ใส่ก็ได้"></textarea>
   <div class="count"><span id="cnt">0</span>/60</div>
   <label class="chk"><input type="checkbox" id="pub" checked> ให้แฟนอ่านคำอธิษฐานได้</label>
-  <button class="go" id="go" disabled>ปล่อยกะทงลงน้ำ</button>
+  <button class="go" id="go">ปล่อยกะทงลงน้ำ</button>
 </section>
 
 <section class="intro" id="intro">
@@ -490,7 +490,7 @@ function drawKrs(t){
     g.globalAlpha=alpha;
     drawKrathong(g,k.cfg,q.x,q.y,q.s,t+k.seed,lit);
     g.restore();
-    if(a<5.5){ bubbles.push({k,q,a}); }
+    if(a<5.5&&k.wish){ bubbles.push({k,q,a}); }
   }
   S.krs=S.krs.filter(k=>!k._dead);
   g.font='14px '+FONT;
@@ -687,13 +687,13 @@ const wishChips=$('#wishChips');
 WISHES.forEach(w=>{ const b=document.createElement('button'); b.className='opt'; b.style.fontSize='14px'; b.style.padding='6px 12px'; b.textContent=w; b.addEventListener('click',()=>{ wish.value=w; wish.dispatchEvent(new Event('input')); wish.focus(); }); wishChips.appendChild(b); });
 function paintChips(){ [...wishChips.children].forEach((b,i)=>b.setAttribute('aria-pressed',String(wish.value.trim()===WISHES[i]))); }
 wish.addEventListener('input',paintChips);
-wish.addEventListener('input',()=>{ $('#cnt').textContent=Array.from(wish.value).length; goBtn.disabled=!wish.value.trim(); });
+wish.addEventListener('input',()=>{ $('#cnt').textContent=Array.from(wish.value).length;  });
 goBtn.addEventListener('click',()=>{
-  const text=wish.value.trim(); if(!text) return;
+  const text=wish.value.trim();
   const d={id:S.uid+'-'+Date.now().toString(36),uid:S.uid,role:S.role,name:S.name,cfg:Object.assign({},S.cfg),wish:text,pub:$('#pub').checked};
   addKr(d,true);
   if(S.room){ try{ S.room.emit('launch',d); }catch(e){} }
-  wish.value=''; $('#cnt').textContent='0'; goBtn.disabled=true; saveProfile(); closeSheet();
+  wish.value=''; $('#cnt').textContent='0'; paintChips(); saveProfile(); closeSheet();
 });
 function saveProfile(){ try{ localStorage.setItem('lk_profile',JSON.stringify({role:S.role,name:S.name,cfg:S.cfg,outfit:S.outfit})); }catch(e){} }
 
