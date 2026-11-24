@@ -460,7 +460,7 @@ function addKr(d,mine){
   const sx=(owner&&owner._x)||W*0.5;
   let t0=now;
   if(!mine){ t0=Math.max(now,(S.lastRemote||0)+1.0); S.lastRemote=t0; }
-  S.krs.push({id:d.id,sx,s0:Math.min(W*0.0023,0.009*W/(n+1)),cfg:d.cfg,wish:String(d.wish||'').slice(0,60),pub:!!d.pub,mine,t0:t0,seed:hashStr(String(d.id))%1000/100});
+  S.krs.push({id:d.id,sx,s0:Math.min(W*0.0023,0.009*W/(n+1)),cfg:d.cfg,wish:String(d.wish||'').slice(0,60),pub:!!d.pub,mine,t0:t0,seed:hashStr(String(d.id))%1000/100,pat:hashStr(String(d.id)+'p')%5,h2:(hashStr(String(d.id)+'x')%1000)/1000});
   if(S.krs.length>80) S.krs.shift();
   if(owner) owner.launchT=t0;
   if(t0-now>0.05) setTimeout(bell,(t0-now)*1000); else bell();
@@ -511,10 +511,21 @@ function drawKrs(t){
 function krPos(k,t){
   const a=Math.max(0,t-k.t0), p=Math.min(a/FLOAT_T,1), u=1-Math.pow(1-p,1.7);
   const dir=k.sx<W/2-1?1:(k.sx>W/2+1?-1:0);
-  const sx=k.sx+dir*CH*0.25, sy=H*0.8;
-  const ex=W*0.5+(k.sx-W*0.5)*0.3, ey=H*0.415;
+  const sx=k.sx+dir*CH*0.25, sy=H*0.8, ey=H*0.415;
+  const pat=k.pat||0, A=W*0.36;
+  let ex=W*(0.2+0.6*(k.h2||0.5)), x, y=lerp(sy,ey,u);
+  if(pat===3) ex=W*0.5+((k.h2||0.5)-0.5)*W*0.12;
+  if(pat===3){ x=lerp(sx,ex,1-Math.pow(1-u,2.6)); }
+  else {
+    x=lerp(sx,ex,u);
+    if(pat===0) x-=A*Math.sin(Math.PI*u);
+    else if(pat===1) x+=A*Math.sin(Math.PI*u);
+    else if(pat===2) x+=A*0.8*Math.sin(Math.PI*2*u);
+    else { const ph=u*Math.PI*2*2.5, f=1-u*0.6; x+=W*0.07*Math.sin(ph)*f; y+=H*0.022*(Math.cos(ph)-1)*(1-u); }
+  }
+  x=Math.max(W*0.05,Math.min(W*0.95,x));
   const drop=Math.pow(1-Math.min(a/1.1,1),2)*-CH*0.3;
-  return {x:lerp(sx,ex,u)+Math.sin(a*0.9+k.seed)*W*0.012*Math.min(1,a/3), y:lerp(sy,ey,u)+Math.sin(a*1.7+k.seed)*2+drop, s:lerp(k.s0,k.s0*0.16,u)};
+  return {x:x+Math.sin(a*0.9+k.seed)*W*0.006*Math.min(1,a/3), y:y+Math.sin(a*1.7+k.seed)*2+drop, s:lerp(k.s0,k.s0*0.16,u)};
 }
 
 /* ---------- ambient ---------- */
